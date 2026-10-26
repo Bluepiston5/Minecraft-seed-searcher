@@ -13,6 +13,14 @@ export interface ClusterOverlay {
   radius: number;
 }
 
+/** Temporary markings for the current suggestion of a finder panel. */
+export interface Highlight {
+  color: string;
+  rings?: { x: number; z: number; r: number; label?: string }[];
+  /** block positions to mark with a square of 'size' blocks */
+  boxes?: { x: number; z: number; size: number }[];
+}
+
 export interface FocusRequest {
   x: number;
   z: number;
@@ -29,6 +37,7 @@ interface Props {
   biomeY: number;
   clusters: ClusterOverlay | null;
   focus: FocusRequest | null;
+  highlight: Highlight | null;
   onCursor: (pos: { x: number; z: number } | null) => void;
   onClusters: (c: Cluster[], truncated: boolean) => void;
   onCopy: (text: string) => void;
@@ -45,7 +54,15 @@ function pinIcon(cls: string, label: string) {
 export default function MapView(props: Props) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<L.Map>();
-  const layers = useRef<{ biome: BiomeLayer; structs: StructureLayer; slime: SlimeLayer; grid: GridLines; marks: L.LayerGroup; clusters: L.LayerGroup }>();
+  const layers = useRef<{
+    biome: BiomeLayer;
+    structs: StructureLayer;
+    slime: SlimeLayer;
+    grid: GridLines;
+    marks: L.LayerGroup;
+    clusters: L.LayerGroup;
+    highlight: L.LayerGroup;
+  }>();
   const latest = useRef(props);
   latest.current = props;
 
@@ -71,8 +88,9 @@ export default function MapView(props: Props) {
     grid.setZIndex(4);
     const marks = L.layerGroup().addTo(m);
     const clusters = L.layerGroup().addTo(m);
+    const highlight = L.layerGroup().addTo(m);
     structs.addTo(m);
-    layers.current = { biome, structs, slime, grid, marks, clusters };
+    layers.current = { biome, structs, slime, grid, marks, clusters, highlight };
     map.current = m;
 
     let moveTimer = 0;
@@ -93,7 +111,7 @@ export default function MapView(props: Props) {
     const l = layers.current!;
     const hit = l.structs.hitTest(pos.x, pos.z, m.getZoom());
     const x = hit ? hit.x + 8 : pos.x, z = hit ? hit.z + 8 : pos.z;
-    const title = hit ? escape(STRUCTURE_BY_KEY[hit.key]?.label ?? hit.key) : 'Position';
+    const title = hit ? escape(STRUCTURE_BY_KEY[hit.key]?.label ?? hit.key) : 'Location';
     const tp = `/tp @s ${x} ~ ${z}`;
     const popup = L.popup({ className: 'map-popup', maxWidth: 260 })
       .setLatLng(hit ? toLatLng(x, z) : at)
@@ -101,8 +119,8 @@ export default function MapView(props: Props) {
         `<div class="pp"><div class="pp-title">${title}</div>` +
           `<div class="pp-row"><span>X / Z</span><b>${x} / ${z}</b></div>` +
           `<div class="pp-row"><span>Chunk</span><b>${x >> 4}, ${z >> 4}</b></div>` +
-          `<div class="pp-row"><span>Biom</span><b class="pp-biome">…</b></div>` +
-          `<button class="pp-copy" data-copy="${escape(tp)}">${escape(tp)} kopieren</button></div>`,
+          `<div class="pp-row"><span>Biome</span><b class="pp-biome">…</b></div>` +
+          `<button class="pp-copy" data-copy="${escape(tp)}">Copy ${escape(tp)}</button></div>`,
       )
       .openOn(m);
     const node = popup.getElement();
@@ -141,7 +159,7 @@ export default function MapView(props: Props) {
         if (!alive) return;
         for (let i = 0; i < r.pos.length; i += 2) {
           const x = r.pos[i], z = r.pos[i + 1];
-          L.marker(toLatLng(x, z), { icon: pinIcon('pin-stronghold', 'E'), title: `Festung ${x} / ${z}` }).addTo(l.marks);
+          L.marker(toLatLng(x, z), { icon: pinIcon('pin-stronghold', 'E'), title: `Stronghold ${x} / ${z}` }).addTo(l.marks);
         }
       })
       .catch(() => {});
@@ -199,7 +217,7 @@ export default function MapView(props: Props) {
             L.circle(toLatLng(c.afkX, c.afkZ), { radius: 128, color, weight: 2, dashArray: '6 4', fillColor: color, fillOpacity: 0.1, interactive: false }).addTo(l.clusters);
             L.marker(toLatLng(c.afkX, c.afkZ), {
               icon: L.divIcon({ className: '', html: `<div class="afk-pin afk-${cls}">${c.count}×</div>`, iconSize: [30, 20], iconAnchor: [15, 10] }),
-              title: `AFK ${c.afkX} / ${c.afkZ} · Radius ${c.radius.toFixed(1)}`,
+              title: `AFK ${c.afkX} / ${c.afkZ} · radius ${c.radius.toFixed(1)}`,
             })
               .on('click', () => latest.current.onCopy(`/tp @s ${c.afkX} ~ ${c.afkZ}`))
               .addTo(l.clusters);
@@ -215,6 +233,30 @@ export default function MapView(props: Props) {
       m.off('moveend', update);
     };
   }, [props.clusters?.key, props.clusters?.minCount, props.clusters?.radius, props.world.seed, props.world.version, props.world.large]);
+
+  useEffect(() => {
+    const g = layers.current!.highlight;
+    g.clearLayers();
+    const h = props.highlight;
+    if (!h) return;
+    for (const b of h.boxes ?? []) {
+      L.rectangle(L.latLngBounds(toLatLng(b.x, b.z), toLatLng(b.x + b.size, b.z + b.size)), {
+        color: h.color,
+        weight: 2,
+        fillOpacity: 0.15,
+        interactive: false,
+      }).addTo(g);
+    }
+    for (const ring of h.rings ?? []) {
+      L.circle(toLatLng(ring.x, ring.z), { radius: ring.r, color: h.color, weight: 2.5, fillColor: h.color, fillOpacity: 0.12, interactive: false }).addTo(g);
+      if (ring.label) {
+        L.marker(toLatLng(ring.x, ring.z), {
+          icon: L.divIcon({ className: '', html: `<div class="afk-pin" style="background:${h.color}">${escape(ring.label)}</div>`, iconSize: [36, 20], iconAnchor: [18, 10] }),
+          interactive: false,
+        }).addTo(g);
+      }
+    }
+  }, [props.highlight]);
 
   useEffect(() => {
     const f = props.focus;

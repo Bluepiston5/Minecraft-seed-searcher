@@ -1,6 +1,8 @@
 // Messages between the UI thread and the cubiomes workers. Seeds travel as
 // decimal strings of the signed 64-bit value.
 
+import type { MultiCluster } from '../lib/cluster';
+
 export interface WorldParams {
   version: string;
   seed: string;
@@ -17,6 +19,9 @@ export type Job =
   | { kind: 'clusters'; world: WorldParams; key: string; minCount: number; radius: number; x0: number; z0: number; x1: number; z1: number }
   | { kind: 'quadBases'; version: string; quality: number; hiStart: number; hiCount: number }
   | { kind: 'quadComplete'; version: string; base: string; upStart: number; upCount: number }
+  | { kind: 'multiClusters'; world: WorldParams; keys: string[]; minCount: number; radius: number; requireAll: boolean; area: number }
+  | { kind: 'slimePattern'; seed: string; pattern: number[]; pw: number; ph: number; cx: number; cz: number; w: number; h: number; max: number }
+  | { kind: 'slimeSeedScan'; seeds: string[]; pattern: number[]; pw: number; ph: number; area: number }
   | { kind: 'seedScan'; version: string; key: string; minCount: number; radius: number; areaRadius: number; seeds: string[] };
 
 export interface Cluster {
@@ -37,6 +42,9 @@ export interface JobResults {
   clusters: { clusters: Cluster[]; truncated: boolean };
   quadBases: { bases: string[] };
   quadComplete: { seeds: string[] };
+  multiClusters: { clusters: MultiCluster[] };
+  slimePattern: { matches: Int32Array };
+  slimeSeedScan: { hits: { seed: string; cx: number; cz: number }[] };
   seedScan: { hits: { seed: string; x: number; z: number }[] };
 }
 

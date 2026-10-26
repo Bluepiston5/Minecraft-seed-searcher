@@ -543,3 +543,44 @@ API int api_seed_has_cluster(uint64_t seed, int stype, int minCount, int radius,
     }
     return 0;
 }
+
+//==============================================================================
+// Slime chunk patterns
+//==============================================================================
+
+/* Finds placements of a chunk pattern (pw*ph cells, non-zero = must be a slime
+ * chunk) whose top-left corner lies in the w*h chunk area starting at (cx,cz).
+ * Writes (x,z) chunk pairs of the top-left corners. Independent of the
+ * generator, the seed is passed directly. */
+API int api_slime_pattern(uint64_t seed, const unsigned char *pat, int pw, int ph,
+        int cx, int cz, int w, int h, int *out, int max)
+{
+    int bw = w + pw - 1, bh = h + ph - 1;
+    unsigned char *map = (unsigned char *) malloc((size_t) bw * bh);
+    if (!map)
+        return 0;
+    for (int j = 0; j < bh; j++)
+        for (int i = 0; i < bw; i++)
+            map[j*bw+i] = (unsigned char) isSlimeChunk(seed, cx + i, cz + j);
+
+    int n = 0;
+    for (int j = 0; j < h && n < max; j++)
+    {
+        for (int i = 0; i < w && n < max; i++)
+        {
+            int ok = 1;
+            for (int pj = 0; pj < ph && ok; pj++)
+                for (int pi = 0; pi < pw && ok; pi++)
+                    if (pat[pj*pw+pi] && !map[(j+pj)*bw + i+pi])
+                        ok = 0;
+            if (ok)
+            {
+                out[2*n+0] = cx + i;
+                out[2*n+1] = cz + j;
+                n++;
+            }
+        }
+    }
+    free(map);
+    return n;
+}

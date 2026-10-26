@@ -21,6 +21,7 @@ export interface CubiomesModule {
   _api_clusters(stype: number, minCount: number, radius: number, rx0: number, rz0: number, rx1: number, rz1: number, out: number, members: number, max: number): number;
   _api_quad_hut_bases(quality: number, hiStart: number, hiCount: number, out: number, max: number): number;
   _api_quad_hut_complete(base: bigint, mc: number, upStart: number, upCount: number, out: number, max: number): number;
+  _api_slime_pattern(seed: bigint, pat: number, pw: number, ph: number, cx: number, cz: number, w: number, h: number, out: number, max: number): number;
   _api_seed_has_cluster(seed: bigint, stype: number, minCount: number, radius: number, regRadius: number, out: number): number;
 }
 declare const init: () => Promise<CubiomesModule>;

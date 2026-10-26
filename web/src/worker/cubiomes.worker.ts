@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import init, { type CubiomesModule } from '../wasm/cubiomes.mjs';
 import type { Job, Request, Response, WorldParams, Cluster } from './protocol';
+import { findClusters, type Placed } from '../lib/cluster';
 
 const ready = init();
 let M: CubiomesModule;
@@ -66,6 +67,14 @@ function readU64(p: number, n: number): bigint[] {
   return Array.from(new BigUint64Array(M.HEAPU8.buffer, p, n));
 }
 
+function structures(stype: number, x0: number, z0: number, x1: number, z1: number): Int32Array {
+  const max = 65536;
+  return withBuf(max * 8, (p) => {
+    const c = M._api_structures(stype, x0, z0, x1, z1, p, max);
+    return M.HEAP32.slice(p >> 2, (p >> 2) + 2 * c);
+  });
+}
+
 function run(job: Job): { result: unknown; transfer: Transferable[] } {
   switch (job.kind) {
     case 'biomes': {
@@ -82,12 +91,8 @@ function run(job: Job): { result: unknown; transfer: Transferable[] } {
       useWorld(job.world);
       const stype = structId(job.key);
       if (!M._api_struct_supported(stype)) return { result: { pos: new Int32Array(0) }, transfer: [] };
-      const max = 8192;
-      return withBuf(max * 8, (p) => {
-        const c = M._api_structures(stype, job.x0, job.z0, job.x1, job.z1, p, max);
-        const pos = M.HEAP32.slice(p >> 2, (p >> 2) + 2 * c);
-        return { result: { pos }, transfer: [pos.buffer] };
-      });
+      const pos = structures(stype, job.x0, job.z0, job.x1, job.z1);
+      return { result: { pos }, transfer: [pos.buffer] };
     }
     case 'slime': {
       useWorld(job.world);
@@ -160,6 +165,53 @@ function run(job: Job): { result: unknown; transfer: Transferable[] } {
         const c = M._api_quad_hut_complete(BigInt(job.base), mcId(job.version), job.upStart, job.upCount, p, max);
         return { result: { seeds: readU64(p, c).map(i64str) }, transfer: [] };
       });
+    }
+    case 'multiClusters': {
+      useWorld(job.world);
+      const items: Placed[] = [];
+      for (const key of job.keys) {
+        const stype = structId(key);
+        if (!M._api_struct_supported(stype)) continue;
+        const pos = structures(stype, -job.area, -job.area, job.area, job.area);
+        for (let i = 0; i < pos.length; i += 2) items.push({ key, x: pos[i], z: pos[i + 1] });
+      }
+      const clusters = findClusters(items, {
+        minCount: job.minCount,
+        radius: job.radius,
+        requireKeys: job.requireAll ? job.keys : undefined,
+      });
+      return { result: { clusters }, transfer: [] };
+    }
+    case 'slimePattern': {
+      const max = Math.min(job.max, 65536);
+      return withBuf(job.pattern.length + max * 8, (p) => {
+        M.HEAPU8.set(job.pattern, p);
+        const out = (p + job.pattern.length + 3) & ~3;
+        const c = M._api_slime_pattern(u64(job.seed), p, job.pw, job.ph, job.cx, job.cz, job.w, job.h, out, max);
+        const matches = M.HEAP32.slice(out >> 2, (out >> 2) + 2 * c);
+        return { result: { matches }, transfer: [matches.buffer] };
+      });
+    }
+    case 'slimeSeedScan': {
+      const hits: { seed: string; cx: number; cz: number }[] = [];
+      const side = 2 * job.area;
+      withBuf(job.pattern.length + 8 * 64 + 4, (p) => {
+        M.HEAPU8.set(job.pattern, p);
+        const out = (p + job.pattern.length + 3) & ~3;
+        for (const s of job.seeds) {
+          const c = M._api_slime_pattern(u64(s), p, job.pw, job.ph, -job.area, -job.area, side, side, out, 64);
+          if (!c) continue;
+          // report the placement nearest to the origin
+          let best = 0, bestD = Infinity;
+          for (let i = 0; i < c; i++) {
+            const x = M.HEAP32[(out >> 2) + 2 * i], z = M.HEAP32[(out >> 2) + 2 * i + 1];
+            const d = (x + job.pw / 2) ** 2 + (z + job.ph / 2) ** 2;
+            if (d < bestD) [best, bestD] = [i, d];
+          }
+          hits.push({ seed: s, cx: M.HEAP32[(out >> 2) + 2 * best], cz: M.HEAP32[(out >> 2) + 2 * best + 1] });
+        }
+      });
+      return { result: { hits }, transfer: [] };
     }
     case 'seedScan': {
       useVersion(job.version);

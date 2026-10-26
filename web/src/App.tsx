@@ -1,17 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import MapView, { type ClusterOverlay, type FocusRequest } from './map/MapView';
+import MapView, { type ClusterOverlay, type FocusRequest, type Highlight } from './map/MapView';
 import QuadHutFinder from './panels/QuadHutFinder';
 import SeedSearch, { CLUSTER_TYPES } from './panels/SeedSearch';
+import ClusterFinder from './panels/ClusterFinder';
+import SlimeFinder from './panels/SlimeFinder';
 import { STRUCTURES, STRUCTURE_BY_KEY, VERSIONS } from './lib/structures';
 import { parseSeed, randomSeed } from './lib/seed';
 import type { Cluster, WorldParams } from './worker/protocol';
 import { drawStructureIcon } from './map/layers';
 
-type Tab = 'map' | 'quad' | 'search';
+type Mode = 'map' | 'clusters' | 'quad' | 'seeds' | 'slime';
+
+const MODES: [Mode, string][] = [
+  ['map', 'Map'],
+  ['clusters', 'Structure Clusters'],
+  ['quad', 'Quad Witch Huts'],
+  ['seeds', 'Seed Finder'],
+  ['slime', 'Slime Chunks'],
+];
+
+const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
 
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
-  return { seed: p.get('seed'), version: p.get('v') };
+  const mode = p.get('mode') as Mode | null;
+  return { seed: p.get('seed'), version: p.get('v'), mode: MODES.some(([m]) => m === mode) ? mode! : 'map' };
 }
 
 function StructIcon({ k }: { k: string }) {
@@ -29,6 +42,7 @@ function StructIcon({ k }: { k: string }) {
 
 export default function App() {
   const initial = useMemo(readHash, []);
+  const [mode, setMode] = useState<Mode>(initial.mode);
   const [seedText, setSeedText] = useState(initial.seed ?? randomSeed().toString());
   const [version, setVersion] = useState(VERSIONS.some((v) => v.id === initial.version) ? initial.version! : VERSIONS[0].id);
   const [large, setLarge] = useState(false);
@@ -39,9 +53,9 @@ export default function App() {
   const [overlay, setOverlay] = useState<ClusterOverlay | null>(null);
   const [clusters, setClusters] = useState<{ list: Cluster[]; truncated: boolean }>({ list: [], truncated: false });
   const [focus, setFocus] = useState<FocusRequest | null>(null);
+  const [highlight, setHighlight] = useState<Highlight | null>(null);
   const [cursor, setCursor] = useState<{ x: number; z: number } | null>(null);
-  const [tab, setTab] = useState<Tab>('map');
-  const [panelOpen, setPanelOpen] = useState(() => !window.matchMedia('(max-width: 760px)').matches);
+  const [panelOpen, setPanelOpen] = useState(() => !isPhone());
   const [toast, setToast] = useState<string | null>(null);
   const [goto, setGoto] = useState('');
 
@@ -49,18 +63,24 @@ export default function App() {
   const world: WorldParams = useMemo(() => ({ version, seed, large }), [version, seed, large]);
 
   useEffect(() => {
-    history.replaceState(null, '', `#seed=${encodeURIComponent(seedText)}&v=${encodeURIComponent(version)}`);
-  }, [seedText, version]);
+    history.replaceState(null, '', `#seed=${encodeURIComponent(seedText)}&v=${encodeURIComponent(version)}&mode=${mode}`);
+  }, [seedText, version, mode]);
+
+  // finder modes bring their own markings
+  useEffect(() => {
+    setHighlight(null);
+    if (mode === 'slime') setSlime(true);
+  }, [mode]);
 
   const toastTimer = useRef(0);
   const copy = useCallback((text: string) => {
     navigator.clipboard?.writeText(text).catch(() => {});
-    setToast(`Kopiert: ${text}`);
+    setToast(`Copied: ${text}`);
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), 1800);
   }, []);
 
-  const focusAt = (x: number, z: number, zoom?: number) => setFocus({ x, z, zoom, token: Date.now() });
+  const focusAt = useCallback((x: number, z: number, zoom?: number) => setFocus({ x, z, zoom, token: Date.now() + Math.random() }), []);
 
   const openSeed = (s: string, kind: string, minCount: number, at?: { x: number; z: number }) => {
     setSeedText(s);
@@ -68,8 +88,13 @@ export default function App() {
     setStructures((cur) => (cur.includes(kind) ? cur : [...cur, kind]));
     const p = at ?? { x: 512, z: 512 };
     focusAt(p.x, p.z, 0);
-    if (window.matchMedia('(max-width: 760px)').matches) setPanelOpen(false);
+    if (isPhone()) setPanelOpen(false);
   };
+
+  const showStructures = useCallback(
+    (keys: string[]) => setStructures((cur) => [...new Set([...cur, ...keys])]),
+    [],
+  );
 
   const toggleStruct = (k: string) => setStructures((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
 
@@ -95,20 +120,28 @@ export default function App() {
             <i />
             <i />
           </span>
-          <span className="brand-name">Seed Searcher</span>
+          <select
+            className="mode"
+            aria-label="What to search for"
+            value={mode}
+            onChange={(e) => {
+              setMode(e.target.value as Mode);
+              setPanelOpen(true);
+            }}
+          >
+            {MODES.map(([m, label]) => (
+              <option key={m} value={m}>
+                {label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="seedbox">
-          <input
-            aria-label="Seed"
-            value={seedText}
-            onChange={(e) => setSeedText(e.target.value)}
-            placeholder="Seed oder Text"
-            spellCheck={false}
-          />
-          <button className="icon-btn" title="Zufälliger Seed" aria-label="Zufälliger Seed" onClick={() => setSeedText(randomSeed().toString())}>
+          <input aria-label="Seed" value={seedText} onChange={(e) => setSeedText(e.target.value)} placeholder="Seed or text" spellCheck={false} />
+          <button className="icon-btn" title="Random seed" aria-label="Random seed" onClick={() => setSeedText(randomSeed().toString())}>
             ⚄
           </button>
-          <button className="icon-btn" title="Seed kopieren" aria-label="Seed kopieren" onClick={() => copy(seed)}>
+          <button className="icon-btn" title="Copy seed" aria-label="Copy seed" onClick={() => copy(seed)}>
             ⧉
           </button>
         </div>
@@ -120,34 +153,21 @@ export default function App() {
           ))}
         </select>
         <button className="btn ghost panel-toggle" onClick={() => setPanelOpen((o) => !o)} aria-expanded={panelOpen}>
-          {panelOpen ? 'Karte' : 'Menü'}
+          {panelOpen ? 'Map' : 'Menu'}
         </button>
       </header>
 
       <aside className="panel">
-        <nav className="tabs" role="tablist">
-          {(
-            [
-              ['map', 'Karte'],
-              ['quad', 'Quad-Hütten'],
-              ['search', 'Seed-Suche'],
-            ] as [Tab, string][]
-          ).map(([t, label]) => (
-            <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <div className={tab === 'map' ? '' : 'hidden'}>
+        <div className="panel-head">{MODES.find(([m]) => m === mode)![1]}</div>
+        <div className={mode === 'map' ? '' : 'hidden'}>
           <div className="panel-body">
-            {seed !== seedText.trim() && seedText.trim() && <p className="hint">Text-Seed entspricht {seed}</p>}
+            {seed !== seedText.trim() && seedText.trim() && <p className="hint">Text seed equals {seed}</p>}
             <form className="goto" onSubmit={submitGoto}>
-              <input value={goto} onChange={(e) => setGoto(e.target.value)} placeholder="Gehe zu X Z" aria-label="Koordinaten" />
-              <button className="btn">Los</button>
+              <input value={goto} onChange={(e) => setGoto(e.target.value)} placeholder="Go to X Z" aria-label="Coordinates" />
+              <button className="btn">Go</button>
             </form>
 
-            <h3>Strukturen</h3>
+            <h3>Structures</h3>
             <ul className="toggles">
               {STRUCTURES.map((s) => (
                 <li key={s.key}>
@@ -159,50 +179,50 @@ export default function App() {
                 </li>
               ))}
             </ul>
-            <p className="hint">Dichte Strukturen erscheinen erst, wenn du weiter hineinzoomst.</p>
+            <p className="hint">Common structures only show up once you zoom in further.</p>
 
-            <h3>Ebenen</h3>
+            <h3>Layers</h3>
             <ul className="toggles">
               <li>
                 <label>
                   <input type="checkbox" checked={slime} onChange={(e) => setSlime(e.target.checked)} />
                   <span className="swatch slime" />
-                  <span>Schleimchunks</span>
+                  <span>Slime chunks</span>
                 </label>
               </li>
               <li>
                 <label>
                   <input type="checkbox" checked={grid} onChange={(e) => setGrid(e.target.checked)} />
                   <span className="swatch grid" />
-                  <span>Chunk- und Regionsraster</span>
+                  <span>Chunk and region grid</span>
                 </label>
               </li>
               <li>
                 <label>
                   <input type="checkbox" checked={large} onChange={(e) => setLarge(e.target.checked)} />
                   <span className="swatch large" />
-                  <span>Große Biome</span>
+                  <span>Large biomes</span>
                 </label>
               </li>
             </ul>
             <label className="field">
-              <span>Biom-Höhe Y</span>
+              <span>Biome height Y</span>
               <select value={biomeY} onChange={(e) => setBiomeY(+e.target.value)}>
-                <option value={320}>320 (Bauhöhe)</option>
-                <option value={64}>64 (Oberfläche)</option>
-                <option value={0}>0 (Höhlen)</option>
-                <option value={-52}>−52 (Tiefes Dunkel)</option>
+                <option value={320}>320 (build limit)</option>
+                <option value={64}>64 (surface)</option>
+                <option value={0}>0 (caves)</option>
+                <option value={-52}>−52 (deep dark)</option>
               </select>
             </label>
 
-            <h3>Farm-Finder auf der Karte</h3>
+            <h3>Farm overlay</h3>
             <label className="field">
-              <span>Struktur</span>
+              <span>Structure</span>
               <select
                 value={overlay?.key ?? ''}
                 onChange={(e) => setOverlay(e.target.value ? { key: e.target.value, minCount: overlay?.minCount ?? 2, radius: overlay?.radius ?? 128 } : null)}
               >
-                <option value="">Aus</option>
+                <option value="">Off</option>
                 {CLUSTER_TYPES.map((k) => (
                   <option key={k} value={k}>
                     {STRUCTURE_BY_KEY[k].label}
@@ -215,13 +235,13 @@ export default function App() {
                 <div className="seg">
                   {[2, 3, 4].map((n) => (
                     <button key={n} className={overlay.minCount === n ? 'on' : ''} onClick={() => setOverlay({ ...overlay, minCount: n })}>
-                      ab {n}×
+                      {n}× or more
                     </button>
                   ))}
                 </div>
                 <p className="hint">
-                  Ringe zeigen AFK-Punkte, bei denen mindestens {overlay.minCount} Strukturen in {overlay.radius} Blöcken Radius liegen.
-                  {clusters.truncated && ' Nur der Bereich um die Kartenmitte wird durchsucht.'}
+                  Rings mark AFK spots with at least {overlay.minCount} structures within a {overlay.radius} block radius.
+                  {clusters.truncated && ' Only the area around the map centre is searched.'}
                 </p>
                 {clusters.list.length > 0 ? (
                   <ul className="results">
@@ -235,27 +255,46 @@ export default function App() {
                             <code>
                               {c.count}× · {c.afkX} / {c.afkZ}
                             </code>
-                            <small>Radius {c.radius.toFixed(1)}</small>
+                            <small>radius {c.radius.toFixed(1)}</small>
                           </button>
-                          <button className="icon-btn" title="Teleport-Befehl kopieren" aria-label="Teleport-Befehl kopieren" onClick={() => copy(`/tp @s ${c.afkX} ~ ${c.afkZ}`)}>
+                          <button
+                            className="icon-btn"
+                            title="Copy /tp command"
+                            aria-label="Copy /tp command"
+                            onClick={() => copy(`/tp @s ${c.afkX} ~ ${c.afkZ}`)}
+                          >
                             ⧉
                           </button>
                         </li>
                       ))}
                   </ul>
                 ) : (
-                  <p className="hint">Im sichtbaren Bereich nichts gefunden.</p>
+                  <p className="hint">Nothing found in the visible area.</p>
                 )}
               </>
             )}
           </div>
         </div>
-        <div className={tab === 'quad' ? '' : 'hidden'}>
+        {mode === 'clusters' && <ClusterFinder world={world} onHighlight={setHighlight} onFocus={focusAt} onCopy={copy} onStructures={showStructures} />}
+        <div className={mode === 'quad' ? '' : 'hidden'}>
           <QuadHutFinder version={version} onCopy={copy} onOpen={(s) => openSeed(s, 'swamp_hut', 4)} />
         </div>
-        <div className={tab === 'search' ? '' : 'hidden'}>
+        <div className={mode === 'seeds' ? '' : 'hidden'}>
           <SeedSearch version={version} onCopy={copy} onOpen={openSeed} />
         </div>
+        {mode === 'slime' && (
+          <SlimeFinder
+            world={world}
+            onHighlight={setHighlight}
+            onFocus={focusAt}
+            onCopy={copy}
+            onOpenSeed={(s, x, z) => {
+              setSeedText(s);
+              focusAt(x, z, 1);
+              if (isPhone()) setPanelOpen(false);
+            }}
+          />
+        )}
       </aside>
 
       <main className="stage">
@@ -267,6 +306,7 @@ export default function App() {
           biomeY={biomeY}
           clusters={overlay}
           focus={focus}
+          highlight={highlight}
           onCursor={setCursor}
           onClusters={onClusters}
           onCopy={copy}
@@ -277,7 +317,7 @@ export default function App() {
               <span>X</span> {cursor.x} <span>Z</span> {cursor.z} <span>Chunk</span> {cursor.x >> 4}, {cursor.z >> 4}
             </>
           ) : (
-            'Klicke auf die Karte für Details'
+            'Click the map for details'
           )}
         </div>
         {toast && <div className="toast">{toast}</div>}

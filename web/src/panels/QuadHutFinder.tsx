@@ -9,10 +9,10 @@ interface Props {
 }
 
 const QUALITIES = [
-  { id: 0, label: 'Ideal', hint: 'Nur die allerbesten Konstellationen, sehr selten' },
-  { id: 1, label: 'Klassisch', hint: 'Die bekannten Quad-Konstellationen' },
-  { id: 2, label: 'Normal', hint: 'Alle Quads mit Fallschacht-Farm (Radius 128)' },
-  { id: 3, label: 'Knapp', hint: 'Auch Quads, die nur ohne Fallschacht passen' },
+  { id: 0, label: 'Ideal', hint: 'Only the very best constellations, very rare' },
+  { id: 1, label: 'Classic', hint: 'The well-known quad constellations' },
+  { id: 2, label: 'Normal', hint: 'All quads that work with a drop-chute farm (radius 128)' },
+  { id: 3, label: 'Barely', hint: 'Also quads that only fit without a drop chute' },
 ];
 
 // The 48-bit search space is split into 2^28 "high" values per low20 pattern.
@@ -114,8 +114,8 @@ export default function QuadHutFinder({ version, onOpen, onCopy }: Props) {
   return (
     <div className="panel-body">
       <p className="lead">
-        Findet Seeds mit vier Hexenhütten, die alle in eine AFK-Kugel mit 128 Blöcken Radius passen. Die Hütten liegen nahe am
-        Weltursprung (etwa X/Z 0–1000).
+        Finds seeds with four witch huts that all fit into one AFK sphere with a 128 block radius. The huts are close to the world origin
+        (roughly X/Z 0–1000).
       </p>
       <label className="field">
         <span>Version</span>
@@ -128,7 +128,7 @@ export default function QuadHutFinder({ version, onOpen, onCopy }: Props) {
         </select>
       </label>
       <label className="field">
-        <span>Qualität</span>
+        <span>Quality</span>
         <select value={quality} onChange={(e) => setQuality(+e.target.value)} disabled={running}>
           {QUALITIES.map((x) => (
             <option key={x.id} value={x.id}>
@@ -139,27 +139,27 @@ export default function QuadHutFinder({ version, onOpen, onCopy }: Props) {
       </label>
       <p className="hint">{q.hint}</p>
       <label className="field">
-        <span>Max. Treffer</span>
+        <span>Max results</span>
         <input type="number" min={1} max={5000} value={limit} onChange={(e) => setLimit(Math.max(1, +e.target.value || 1))} disabled={running} />
       </label>
       <div className="row">
         {running ? (
           <button className="btn danger" onClick={() => stopRef.current?.()}>
-            Stopp
+            Stop
           </button>
         ) : (
           <button className="btn primary" onClick={start}>
-            Suche starten
+            Start search
           </button>
         )}
       </div>
       <div className="stats">
         <div>
-          <span>Fortschritt</span>
+          <span>Progress</span>
           <b>{(progress * 100).toFixed(2)} %</b>
         </div>
         <div>
-          <span>Quad-Basen</span>
+          <span>Quad bases</span>
           <b>{bases}</b>
         </div>
         <div>
@@ -189,11 +189,11 @@ export function ResultList({
     <ul className="results">
       {seeds.map((s) => (
         <li key={s}>
-          <button className="seed" onClick={() => onOpen(s)} title="Auf der Karte öffnen">
+          <button className="seed" onClick={() => onOpen(s)} title="Show on map">
             <code>{s}</code>
             {detail?.(s) && <small>{detail(s)}</small>}
           </button>
-          <button className="icon-btn" onClick={() => onCopy(s)} title="Seed kopieren" aria-label="Seed kopieren">
+          <button className="icon-btn" onClick={() => onCopy(s)} title="Copy seed" aria-label="Copy seed">
             ⧉
           </button>
         </li>

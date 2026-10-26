@@ -88,8 +88,8 @@ export default function SeedSearch({ version, onOpen, onCopy }: Props) {
   return (
     <div className="panel-body">
       <p className="lead">
-        Durchsucht viele Seeds nach mehreren Strukturen, die zusammen in eine AFK-Kugel passen, zum Beispiel Doppel- oder
-        Dreifach-Monumente.
+        Searches many seeds for several structures of one type that fit into one AFK sphere near 0, 0, for example double or triple
+        ocean monuments.
       </p>
       <label className="field">
         <span>Version</span>
@@ -102,7 +102,7 @@ export default function SeedSearch({ version, onOpen, onCopy }: Props) {
         </select>
       </label>
       <label className="field">
-        <span>Struktur</span>
+        <span>Structure</span>
         <select value={key} onChange={(e) => setKey(e.target.value)} disabled={lock}>
           {CLUSTER_TYPES.map((k) => (
             <option key={k} value={k}>
@@ -111,64 +111,64 @@ export default function SeedSearch({ version, onOpen, onCopy }: Props) {
           ))}
         </select>
       </label>
-      <div className="seg" role="radiogroup" aria-label="Anzahl">
+      <div className="seg" role="radiogroup" aria-label="Count">
         {[2, 3, 4].map((n) => (
           <button key={n} role="radio" aria-checked={minCount === n} className={minCount === n ? 'on' : ''} onClick={() => setMinCount(n)} disabled={lock}>
-            {n === 2 ? 'Doppelt' : n === 3 ? 'Dreifach' : 'Quad'}
+            {n === 2 ? 'Double' : n === 3 ? 'Triple' : 'Quad'}
           </button>
         ))}
       </div>
       <label className="field">
-        <span>AFK-Radius</span>
+        <span>AFK radius</span>
         <input type="number" min={16} max={256} value={radius} onChange={(e) => setRadius(+e.target.value || 128)} disabled={lock} />
       </label>
       <label className="field">
-        <span>Suchgebiet ±</span>
+        <span>Area ± blocks</span>
         <input type="number" min={512} max={20000} step={512} value={area} onChange={(e) => setArea(+e.target.value || 2000)} disabled={lock} />
       </label>
       <div className="seg">
         <button className={mode === 'random' ? 'on' : ''} onClick={() => setMode('random')} disabled={lock}>
-          Zufällig
+          Random
         </button>
         <button className={mode === 'sequential' ? 'on' : ''} onClick={() => setMode('sequential')} disabled={lock}>
-          Ab Seed
+          From seed
         </button>
       </div>
       {mode === 'sequential' && (
         <label className="field">
-          <span>Start-Seed</span>
+          <span>Start seed</span>
           <input value={startSeed} onChange={(e) => setStartSeed(e.target.value)} disabled={lock} />
         </label>
       )}
       <label className="field">
-        <span>Max. Treffer</span>
+        <span>Max results</span>
         <input type="number" min={1} max={5000} value={limit} onChange={(e) => setLimit(Math.max(1, +e.target.value || 1))} disabled={lock} />
       </label>
       {key === 'monument' && minCount === 4 && (
-        <p className="hint warn">Vier Monumente in einer AFK-Kugel kommen in 1.21 praktisch nicht vor. Doppelt oder dreifach ist realistisch.</p>
+        <p className="hint warn">Four monuments in one AFK sphere practically never happen in 1.21. Double or triple is realistic.</p>
       )}
       <div className="row">
         {running ? (
           <button className="btn danger" onClick={() => stopRef.current?.()}>
-            Stopp
+            Stop
           </button>
         ) : (
           <button className="btn primary" onClick={start}>
-            Suche starten
+            Start search
           </button>
         )}
       </div>
       <div className="stats">
         <div>
-          <span>Geprüft</span>
-          <b>{checked.toLocaleString('de-DE')}</b>
+          <span>Checked</span>
+          <b>{checked.toLocaleString('en-US')}</b>
         </div>
         <div>
           <span>Seeds/s</span>
-          <b>{Math.round(rate).toLocaleString('de-DE')}</b>
+          <b>{Math.round(rate).toLocaleString('en-US')}</b>
         </div>
         <div>
-          <span>Treffer</span>
+          <span>Results</span>
           <b>{hits.length}</b>
         </div>
       </div>
