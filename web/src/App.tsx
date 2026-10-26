@@ -4,9 +4,9 @@ import QuadHutFinder from './panels/QuadHutFinder';
 import SeedSearch, { CLUSTER_TYPES } from './panels/SeedSearch';
 import ClusterFinder from './panels/ClusterFinder';
 import SlimeFinder from './panels/SlimeFinder';
-import { STRUCTURES, STRUCTURE_BY_KEY, VERSIONS } from './lib/structures';
+import { DIMENSIONS, STRUCTURES, STRUCTURE_BY_KEY, VERSIONS } from './lib/structures';
 import { parseSeed, randomSeed } from './lib/seed';
-import type { Cluster, WorldParams } from './worker/protocol';
+import type { Cluster, Dimension, WorldParams } from './worker/protocol';
 import { drawStructureIcon } from './map/layers';
 
 type Mode = 'map' | 'clusters' | 'quad' | 'seeds' | 'slime';
@@ -19,12 +19,31 @@ const MODES: [Mode, string][] = [
   ['slime', 'Slime Chunks'],
 ];
 
+const OVERWORLD_HEIGHTS: [number, string][] = [
+  [320, '320 (build limit)'],
+  [64, '64 (surface)'],
+  [0, '0 (caves)'],
+  [-52, '−52 (deep dark)'],
+];
+
+const NETHER_HEIGHTS: [number, string][] = [
+  [100, '100 (upper nether)'],
+  [64, '64 (middle)'],
+  [32, '32 (lava sea)'],
+];
+
 const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
 
 function readHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   const mode = p.get('mode') as Mode | null;
-  return { seed: p.get('seed'), version: p.get('v'), mode: MODES.some(([m]) => m === mode) ? mode! : 'map' };
+  const dim = p.get('dim') as Dimension | null;
+  return {
+    seed: p.get('seed'),
+    version: p.get('v'),
+    mode: MODES.some(([m]) => m === mode) ? mode! : 'map',
+    dim: DIMENSIONS.some(([d]) => d === dim) ? dim! : 'overworld',
+  };
 }
 
 function StructIcon({ k }: { k: string }) {
@@ -43,6 +62,8 @@ function StructIcon({ k }: { k: string }) {
 export default function App() {
   const initial = useMemo(readHash, []);
   const [mode, setMode] = useState<Mode>(initial.mode);
+  // the finders work on overworld structures and slime chunks only
+  const [dim, setDim] = useState<Dimension>(initial.mode === 'map' ? initial.dim : 'overworld');
   const [seedText, setSeedText] = useState(initial.seed ?? randomSeed().toString());
   const [version, setVersion] = useState(VERSIONS.some((v) => v.id === initial.version) ? initial.version! : VERSIONS[0].id);
   const [large, setLarge] = useState(false);
@@ -60,11 +81,17 @@ export default function App() {
   const [goto, setGoto] = useState('');
 
   const seed = useMemo(() => (parseSeed(seedText) ?? 0n).toString(), [seedText]);
-  const world: WorldParams = useMemo(() => ({ version, seed, large }), [version, seed, large]);
+  const world: WorldParams = useMemo(() => ({ version, seed, large, dim }), [version, seed, large, dim]);
+  const dimStructures = useMemo(() => STRUCTURES.filter((s) => s.dim === dim), [dim]);
+  const shownStructures = useMemo(() => structures.filter((k) => STRUCTURE_BY_KEY[k]?.dim === dim), [structures, dim]);
 
   useEffect(() => {
-    history.replaceState(null, '', `#seed=${encodeURIComponent(seedText)}&v=${encodeURIComponent(version)}&mode=${mode}`);
-  }, [seedText, version, mode]);
+    history.replaceState(
+      null,
+      '',
+      `#seed=${encodeURIComponent(seedText)}&v=${encodeURIComponent(version)}&mode=${mode}${dim === 'overworld' ? '' : `&dim=${dim}`}`,
+    );
+  }, [seedText, version, mode, dim]);
 
   // finder modes bring their own markings
   useEffect(() => {
@@ -125,12 +152,31 @@ export default function App() {
             aria-label="What to search for"
             value={mode}
             onChange={(e) => {
-              setMode(e.target.value as Mode);
+              const m = e.target.value as Mode;
+              setMode(m);
+              if (m !== 'map') setDim('overworld');
               setPanelOpen(true);
             }}
           >
             {MODES.map(([m, label]) => (
               <option key={m} value={m}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="dim"
+            aria-label="Dimension"
+            value={dim}
+            onChange={(e) => {
+              const d = e.target.value as Dimension;
+              setDim(d);
+              setBiomeY(64);
+              if (d !== 'overworld') setMode('map');
+            }}
+          >
+            {DIMENSIONS.map(([d, label]) => (
+              <option key={d} value={d}>
                 {label}
               </option>
             ))}
@@ -169,7 +215,7 @@ export default function App() {
 
             <h3>Structures</h3>
             <ul className="toggles">
-              {STRUCTURES.map((s) => (
+              {dimStructures.map((s) => (
                 <li key={s.key}>
                   <label>
                     <input type="checkbox" checked={structures.includes(s.key)} onChange={() => toggleStruct(s.key)} />
@@ -181,6 +227,8 @@ export default function App() {
             </ul>
             <p className="hint">Common structures only show up once you zoom in further.</p>
 
+            {dim === 'overworld' && (
+            <>
             <h3>Layers</h3>
             <ul className="toggles">
               <li>
@@ -205,16 +253,24 @@ export default function App() {
                 </label>
               </li>
             </ul>
+            </>
+            )}
+            {dim !== 'end' && (
             <label className="field">
               <span>Biome height Y</span>
               <select value={biomeY} onChange={(e) => setBiomeY(+e.target.value)}>
-                <option value={320}>320 (build limit)</option>
-                <option value={64}>64 (surface)</option>
-                <option value={0}>0 (caves)</option>
-                <option value={-52}>−52 (deep dark)</option>
+                {(dim === 'nether' ? NETHER_HEIGHTS : OVERWORLD_HEIGHTS).map(([y, label]) => (
+                  <option key={y} value={y}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </label>
+            )}
+            {dim === 'nether' && <p className="hint">Click the map to see the matching overworld coordinates for portals.</p>}
 
+            {dim === 'overworld' && (
+            <>
             <h3>Farm overlay</h3>
             <label className="field">
               <span>Structure</span>
@@ -273,6 +329,8 @@ export default function App() {
                 )}
               </>
             )}
+            </>
+            )}
           </div>
         </div>
         {mode === 'clusters' && <ClusterFinder world={world} onHighlight={setHighlight} onFocus={focusAt} onCopy={copy} onStructures={showStructures} />}
@@ -300,7 +358,7 @@ export default function App() {
       <main className="stage">
         <MapView
           world={world}
-          structures={structures}
+          structures={shownStructures}
           slime={slime}
           grid={grid}
           biomeY={biomeY}

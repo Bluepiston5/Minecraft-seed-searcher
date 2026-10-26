@@ -477,8 +477,9 @@ button:disabled {
   font-size: 11.5px;
 }
 
-/* mode picker, top left */
-.mode {
+/* mode and dimension pickers, top left */
+.mode,
+.dim {
   width: auto;
   font-weight: 700;
   background: var(--panel-2);
@@ -780,24 +781,55 @@ button:disabled {
   }
 
   .topbar {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    grid-template-areas: 'logo mode dim menu' 'seed seed seed seed' 'version version version version';
     padding: 8px 16px;
     gap: 8px;
   }
 
+  .brand {
+    display: contents;
+  }
+
+  .logo {
+    grid-area: logo;
+    align-self: center;
+  }
+
   .mode {
-    max-width: 52vw;
+    grid-area: mode;
+  }
+
+  .dim {
+    grid-area: dim;
+  }
+
+  .mode,
+  .dim,
+  .version {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .mode,
+  .dim {
+    padding: 7px 4px 7px 8px;
+    font-size: 13px;
   }
 
   .seedbox {
-    order: 3;
-    flex-basis: 100%;
+    grid-area: seed;
     max-width: none;
   }
 
   .version {
-    flex: 1;
-    max-width: none;
+    grid-area: version;
+  }
+
+  .panel-toggle {
+    grid-area: menu;
   }
 
   .panel-toggle {

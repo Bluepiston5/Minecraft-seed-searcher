@@ -14,15 +14,19 @@
 #define API EMSCRIPTEN_KEEPALIVE
 
 static Generator g;
+static SurfaceNoise g_sn; // End terrain, for end city checks
 static int g_ready = 0;
 static unsigned char g_colors[256][3];
 
-API int api_init(int mc, uint64_t seed, int largeBiomes)
+/* dim: DIM_OVERWORLD (0), DIM_NETHER (-1) or DIM_END (+1) */
+API int api_init(int mc, uint64_t seed, int largeBiomes, int dim)
 {
     if (!g_ready)
         initBiomeColors(g_colors);
     setupGenerator(&g, mc, largeBiomes ? LARGE_BIOMES : 0);
-    applySeed(&g, DIM_OVERWORLD, seed);
+    applySeed(&g, dim, seed);
+    if (dim == DIM_END)
+        initSurfaceNoise(&g_sn, DIM_END, seed);
     g_ready = 1;
     return 1;
 }
@@ -127,6 +131,8 @@ static int viablePos(int stype, int rx, int rz, Pos *p)
     if (!isViableStructureTerrain(stype, &g, p->x, p->z))
         return 0;
     if (stype == Outpost && outpostNearVillage(p->x, p->z))
+        return 0;
+    if (stype == End_City && !isViableEndCityTerrain(&g, &g_sn, p->x, p->z))
         return 0;
     return 1;
 }

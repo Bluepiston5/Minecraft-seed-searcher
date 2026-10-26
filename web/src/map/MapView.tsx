@@ -47,6 +47,13 @@ const escape = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': 
 
 const RING_COLORS = { quad: '#f2c94c', triple: '#6fcf7f', double: '#6ab0f3' };
 
+/** Matching portal coordinates in the other dimension (1:8). */
+function portalRow(dim: string, x: number, z: number) {
+  if (dim === 'overworld') return `<div class="pp-row"><span>Nether</span><b>${Math.floor(x / 8)} / ${Math.floor(z / 8)}</b></div>`;
+  if (dim === 'nether') return `<div class="pp-row"><span>Overworld</span><b>${x * 8} / ${z * 8}</b></div>`;
+  return '';
+}
+
 function pinIcon(cls: string, label: string) {
   return L.divIcon({ className: '', html: `<div class="pin ${cls}">${label}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] });
 }
@@ -119,6 +126,7 @@ export default function MapView(props: Props) {
         `<div class="pp"><div class="pp-title">${title}</div>` +
           `<div class="pp-row"><span>X / Z</span><b>${x} / ${z}</b></div>` +
           `<div class="pp-row"><span>Chunk</span><b>${x >> 4}, ${z >> 4}</b></div>` +
+          portalRow(latest.current.world.dim, x, z) +
           `<div class="pp-row"><span>Biome</span><b class="pp-biome">…</b></div>` +
           `<button class="pp-copy" data-copy="${escape(tp)}">Copy ${escape(tp)}</button></div>`,
       )
@@ -146,6 +154,8 @@ export default function MapView(props: Props) {
     l.marks.clearLayers();
     const world = props.world;
     let alive = true;
+    // spawn and strongholds only exist in the overworld
+    if (world.dim === 'overworld') {
     getPool()
       .run({ kind: 'spawn', world }, { priority: 4 })
       .then((s) => {
@@ -159,14 +169,15 @@ export default function MapView(props: Props) {
         if (!alive) return;
         for (let i = 0; i < r.pos.length; i += 2) {
           const x = r.pos[i], z = r.pos[i + 1];
-          L.marker(toLatLng(x, z), { icon: pinIcon('pin-stronghold', 'E'), title: `Stronghold ${x} / ${z}` }).addTo(l.marks);
+          L.marker(toLatLng(x, z), { icon: pinIcon('pin-stronghold', 'S'), title: `Stronghold ${x} / ${z}` }).addTo(l.marks);
         }
       })
       .catch(() => {});
+    }
     return () => {
       alive = false;
     };
-  }, [props.world.seed, props.world.version, props.world.large]);
+  }, [props.world.seed, props.world.version, props.world.large, props.world.dim]);
 
   useEffect(() => {
     layers.current!.structs.setKeys(props.structures);
@@ -174,9 +185,9 @@ export default function MapView(props: Props) {
 
   useEffect(() => {
     const m = map.current!, l = layers.current!;
-    if (props.slime) l.slime.addTo(m);
+    if (props.slime && props.world.dim === 'overworld') l.slime.addTo(m);
     else l.slime.remove();
-  }, [props.slime]);
+  }, [props.slime, props.world.dim]);
 
   useEffect(() => {
     const m = map.current!, l = layers.current!;
@@ -192,7 +203,7 @@ export default function MapView(props: Props) {
   useEffect(() => {
     const m = map.current!, l = layers.current!;
     l.clusters.clearLayers();
-    const ov = props.clusters;
+    const ov = props.world.dim === 'overworld' ? props.clusters : null;
     if (!ov) {
       latest.current.onClusters([], false);
       return;
@@ -232,7 +243,7 @@ export default function MapView(props: Props) {
       ctrl?.abort();
       m.off('moveend', update);
     };
-  }, [props.clusters?.key, props.clusters?.minCount, props.clusters?.radius, props.world.seed, props.world.version, props.world.large]);
+  }, [props.clusters?.key, props.clusters?.minCount, props.clusters?.radius, props.world.seed, props.world.version, props.world.large, props.world.dim]);
 
   useEffect(() => {
     const g = layers.current!.highlight;

@@ -5,7 +5,7 @@ export interface CubiomesModule {
   UTF8ToString(ptr: number): string;
   _malloc(n: number): number;
   _free(p: number): void;
-  _api_init(mc: number, seed: bigint, large: number): number;
+  _api_init(mc: number, seed: bigint, large: number, dim: number): number;
   _api_str2mc(s: number): number;
   _api_feature_num(): number;
   _api_struct_name(stype: number): number;

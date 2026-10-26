@@ -41,17 +41,19 @@ function structId(key: string): number {
 const u64 = (s: string) => BigInt.asUintN(64, BigInt(s));
 const i64str = (v: bigint) => BigInt.asIntN(64, v).toString();
 
+const DIM_ID = { overworld: 0, nether: -1, end: 1 } as const;
+
 function useWorld(w: WorldParams) {
-  const key = `${w.version}|${w.seed}|${w.large}`;
+  const key = `${w.version}|${w.seed}|${w.large}|${w.dim}`;
   if (key !== current) {
-    M._api_init(mcId(w.version), u64(w.seed), w.large ? 1 : 0);
+    M._api_init(mcId(w.version), u64(w.seed), w.large ? 1 : 0, DIM_ID[w.dim]);
     current = key;
   }
 }
 
 // Ensures the generator matches a version without caring about the seed.
 function useVersion(version: string) {
-  if (!current.startsWith(version + '|')) useWorld({ version, seed: '0', large: false });
+  if (!current.startsWith(version + '|') || !current.endsWith('|overworld')) useWorld({ version, seed: '0', large: false, dim: 'overworld' });
 }
 
 function withBuf<T>(bytes: number, fn: (p: number) => T): T {

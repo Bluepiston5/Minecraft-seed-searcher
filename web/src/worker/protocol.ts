@@ -3,10 +3,13 @@
 
 import type { MultiCluster } from '../lib/cluster';
 
+export type Dimension = 'overworld' | 'nether' | 'end';
+
 export interface WorldParams {
   version: string;
   seed: string;
   large: boolean;
+  dim: Dimension;
 }
 
 export type Job =
